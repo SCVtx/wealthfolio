@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "pnpm --filter frontend dev",
     "dev:tauri": "pnpm --filter frontend dev:tauri",
+    "desktop:run": "./scripts/build_and_run.sh",
     "dev:addons": "pnpm --filter frontend dev:addons",
     "dev:web": "node scripts/dev-web.mjs",
     "build": "pnpm --filter frontend build",

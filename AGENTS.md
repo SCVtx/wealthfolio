@@ -36,7 +36,22 @@ common task playbooks.
 - For multi-step tasks, state a brief plan with verification steps.
 - Unverified work is incomplete work.
 
-### 5. Output Precision
+### 5. Whole-Repo Scan Rule
+
+- Do **not** start new windows with a full repo scan by default.
+- Start from the source-of-truth docs plus the most likely seam for the task,
+  then expand outward only if needed.
+- A whole repo scan is justified only when at least one of these is true:
+  - the user explicitly asks for repo-wide analysis, architecture review, or a
+    broad audit
+  - the task is cross-cutting by nature, such as security review, large
+    refactor planning, shared-type migration, or framework-wide convention work
+  - ownership is genuinely unclear after inspecting the likely insertion points
+  - targeted searches in the likely area fail to explain the behavior
+- In fresh-window workflows, prefer multiple narrow searches over one giant
+  scan so the window stays useful for implementation and verification.
+
+### 6. Output Precision
 
 - Lead with findings, not process descriptions.
 - Use structured formats (lists, tables, code blocks).
@@ -89,6 +104,27 @@ crates/
 | Type check   | `pnpm type-check`  |
 | Lint         | `pnpm lint`        |
 | All checks   | `pnpm check`       |
+
+## gstack Workflow
+
+This repo uses repo-local gstack skills from `.agents/skills/`.
+
+For major features, use this order:
+
+1. `/office-hours`
+2. `/plan-ceo-review`
+3. `/plan-eng-review`
+4. Build
+5. `/review`
+6. `/qa`
+7. `/ship`
+
+For this fork specifically:
+
+- Keep the wedge narrow: private-assets tracking, document-backed ingestion, and performance.
+- Prefer first-class core models over UI-only workarounds.
+- Do not start with PDF parsing before the private ledger exists.
+- Use clean-room implementation when inspired by outside projects.
 
 ---
 
