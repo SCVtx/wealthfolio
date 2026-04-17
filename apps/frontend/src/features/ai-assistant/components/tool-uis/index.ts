@@ -13,6 +13,12 @@ import { HoldingsToolUI } from "./holdings-tool-ui";
 import { ImportCsvToolUI } from "./import-csv-tool-ui";
 import { IncomeToolUI } from "./income-tool-ui";
 import { PerformanceToolUI } from "./performance-tool-ui";
+import {
+  PrivateAssetDetailToolUI,
+  PrivateAssetHistoryToolUI,
+  PrivateAssetRowsToolUI,
+  PrivateAssetTotalsToolUI,
+} from "./private-assets-tool-ui";
 import { RecordActivityToolUI } from "./record-activity-tool-ui";
 import { RecordActivitiesToolUI } from "./record-activities-tool-ui";
 import { ValuationToolUI } from "./valuation-tool-ui";
@@ -27,9 +33,13 @@ export const toolUIs = {
   get_goals: GoalsToolUI,
   get_holdings: HoldingsToolUI,
   get_income: IncomeToolUI,
+  get_private_asset_current_totals: PrivateAssetTotalsToolUI,
+  get_private_asset_detail: PrivateAssetDetailToolUI,
+  get_private_asset_historical_series: PrivateAssetHistoryToolUI,
   get_performance: PerformanceToolUI,
   get_valuation_history: ValuationToolUI,
   import_csv: ImportCsvToolUI,
+  list_private_asset_rows: PrivateAssetRowsToolUI,
   record_activity: RecordActivityToolUI,
   record_activities: RecordActivitiesToolUI,
   search_activities: ActivitiesToolUI,
@@ -47,6 +57,10 @@ export {
   ImportCsvToolUI,
   IncomeToolUI,
   PerformanceToolUI,
+  PrivateAssetDetailToolUI,
+  PrivateAssetHistoryToolUI,
+  PrivateAssetRowsToolUI,
+  PrivateAssetTotalsToolUI,
   RecordActivityToolUI,
   RecordActivitiesToolUI,
   ValuationToolUI,

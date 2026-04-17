@@ -41,6 +41,7 @@ mod market_data;
 mod net_worth;
 mod performance;
 mod portfolio;
+mod private_assets;
 mod secrets;
 mod settings;
 pub mod shared;
@@ -103,6 +104,7 @@ pub fn app_router(state: Arc<AppState>, config: &Config) -> Router {
         .merge(taxonomies::router())
         .merge(net_worth::router())
         .merge(alternative_assets::router())
+        .merge(private_assets::router())
         .merge(ai_providers::router())
         .merge(ai_chat::router())
         .merge(health::router())

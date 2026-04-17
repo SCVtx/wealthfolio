@@ -1,3 +1,4 @@
+import { listPrivateAssetRows } from "@/adapters";
 import { useAccounts } from "@/hooks/use-accounts";
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
 import {
@@ -8,8 +9,9 @@ import { useHoldings } from "@/hooks/use-holdings";
 import { usePersistentState } from "@/hooks/use-persistent-state";
 import { useIsMobileViewport } from "@/hooks/use-platform";
 import { AccountType, HoldingType, PORTFOLIO_ACCOUNT_ID } from "@/lib/constants";
+import { QueryKeys } from "@/lib/query-keys";
 import { useSettingsContext } from "@/lib/settings-provider";
-import { Account } from "@/lib/types";
+import { Account, type PrivateAssetListRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useNavigation } from "@/pages/layouts/navigation/app-navigation";
 import { useNavigationMode } from "@/pages/layouts/navigation/navigation-mode-context";
@@ -30,11 +32,12 @@ import {
   SheetTitle,
   type Icon,
 } from "@wealthfolio/ui";
+import { useQuery } from "@tanstack/react-query";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 interface RecentItem {
-  type: "action" | "holding" | "account";
+  type: "action" | "holding" | "account" | "privateAsset";
   id: string; // For actions: href, for holdings: symbol, for accounts: accountId
   label: string;
   timestamp: number;
@@ -47,6 +50,11 @@ interface LauncherHoldingItem {
   id: string;
   symbol: string;
   name?: string | null;
+}
+interface LauncherPrivateAssetItem {
+  id: string;
+  name: string;
+  managerName?: string | null;
 }
 interface LauncherAccountItem {
   id: string;
@@ -77,6 +85,10 @@ export function AppLauncher() {
   const navigation = useNavigation();
   const { accounts, isLoading: isAccountsLoading } = useAccounts();
   const { holdings, isLoading: isHoldingsLoading } = useHoldings(PORTFOLIO_ACCOUNT_ID);
+  const privateAssetsQuery = useQuery<PrivateAssetListRow[], Error>({
+    queryKey: QueryKeys.privateAssetRows(false),
+    queryFn: () => listPrivateAssetRows(false),
+  });
   const { isBalanceHidden, toggleBalanceVisibility } = useBalancePrivacy();
   const { updateSettings } = useSettingsContext();
   const { mutate: updatePortfolio, isPending: isUpdatingPortfolio } = useUpdatePortfolioMutation();
@@ -351,6 +363,13 @@ export function AppLauncher() {
         label: "Manage Accounts",
       },
       {
+        title: "Manage Private Assets",
+        href: "/settings/private-assets",
+        icon: <Icons.Briefcase className="size-6" />,
+        keywords: ["private assets", "private", "alternatives", "manage", "settings"],
+        label: "Manage Private Assets",
+      },
+      {
         title: "Manage Goals",
         href: "/settings/goals",
         icon: <Icons.Goal className="size-6" />,
@@ -418,6 +437,19 @@ export function AppLauncher() {
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [accounts]);
+  const privateAssetOptions = useMemo<LauncherPrivateAssetItem[]>(() => {
+    if (!privateAssetsQuery.data?.length) {
+      return [];
+    }
+
+    return privateAssetsQuery.data
+      .map((asset) => ({
+        id: asset.assetId,
+        name: asset.name,
+        managerName: asset.fundManagerName,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [privateAssetsQuery.data]);
   const handleSelectHolding = (id: string, symbol: string, name?: string | null) => {
     if (!id) {
       return;
@@ -430,6 +462,20 @@ export function AppLauncher() {
     setSearch("");
     setOpen(false);
     navigate(`/holdings/${encodeURIComponent(id)}`);
+  };
+  const handleSelectPrivateAsset = (id: string, name: string) => {
+    if (!id) {
+      return;
+    }
+
+    addRecentItem({
+      type: "privateAsset",
+      id,
+      label: name,
+    });
+    setSearch("");
+    setOpen(false);
+    navigate(`/settings/private-assets/${id}`);
   };
   const handleSelectAccount = (accountId: string, accountName: string) => {
     if (!accountId) {
@@ -552,6 +598,9 @@ export function AppLauncher() {
       case "account":
         navigate(`/accounts/${item.id}`);
         break;
+      case "privateAsset":
+        navigate(`/settings/private-assets/${item.id}`);
+        break;
       case "action":
         navigate(item.id);
         break;
@@ -576,6 +625,12 @@ export function AppLauncher() {
   const filteredAccounts = accountOptions.filter((account) => {
     return account.name.toLowerCase().includes(searchLower);
   });
+  const filteredPrivateAssets = privateAssetOptions.filter((asset) => {
+    return (
+      asset.name.toLowerCase().includes(searchLower) ||
+      asset.managerName?.toLowerCase().includes(searchLower)
+    );
+  });
 
   // Filter recent items based on search (only show when searching or when no search)
   const filteredRecent = recentItems.filter((item) => {
@@ -589,6 +644,7 @@ export function AppLauncher() {
   const hasResults =
     filteredActions.length > 0 ||
     filteredHoldings.length > 0 ||
+    filteredPrivateAssets.length > 0 ||
     filteredAccounts.length > 0 ||
     showRecent;
 
@@ -614,7 +670,7 @@ export function AppLauncher() {
   const commandContent = (
     <>
       <CommandInput
-        placeholder="Search actions, holdings, or accounts..."
+        placeholder="Search actions, holdings, private assets, or accounts..."
         autoFocus={!isMobileViewport && open}
         value={search}
         onValueChange={setSearch}
@@ -636,6 +692,8 @@ export function AppLauncher() {
                     return <Icons.TrendingUp className={iconClassName} />;
                   case "account":
                     return <Icons.Wallet className={iconClassName} />;
+                  case "privateAsset":
+                    return <Icons.Briefcase className={iconClassName} />;
                   case "action":
                     return <Icons.Clock className={iconClassName} />;
                   default:
@@ -713,6 +771,33 @@ export function AppLauncher() {
             )}
           </CommandGroup>
         )}
+        {(privateAssetsQuery.isLoading || filteredPrivateAssets.length > 0) && (
+          <CommandGroup heading="Private Assets">
+            {privateAssetsQuery.isLoading ? (
+              <CommandItem disabled className={cn(isMobileViewport ? "py-4 text-base" : undefined)}>
+                Loading private assets...
+              </CommandItem>
+            ) : (
+              filteredPrivateAssets.map((asset) => (
+                <CommandItem
+                  key={asset.id}
+                  value={asset.name}
+                  keywords={[asset.name, asset.managerName ?? "", "private", "private asset"].filter(
+                    (keyword): keyword is string => Boolean(keyword),
+                  )}
+                  onSelect={() => handleSelectPrivateAsset(asset.id, asset.name)}
+                  className={cn(isMobileViewport ? "gap-3 py-4 text-base" : undefined)}
+                >
+                  <Icons.Briefcase className={iconClassName} />
+                  <span className="font-medium">{asset.name}</span>
+                  {asset.managerName ? (
+                    <span className="text-muted-foreground ml-2 truncate">{asset.managerName}</span>
+                  ) : null}
+                </CommandItem>
+              ))
+            )}
+          </CommandGroup>
+        )}
         {(isAccountsLoading || filteredAccounts.length > 0) && (
           <CommandGroup heading="Accounts">
             {isAccountsLoading ? (
@@ -775,7 +860,7 @@ export function AppLauncher() {
     <CommandDialog open={open} onOpenChange={setOpen}>
       <DialogTitle className="sr-only">Command palette</DialogTitle>
       <DialogDescription className="sr-only">
-        Search for actions, holdings, accounts, or navigation destinations.
+        Search for actions, holdings, private assets, accounts, or navigation destinations.
       </DialogDescription>
       {commandContent}
     </CommandDialog>

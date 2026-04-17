@@ -211,6 +211,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    fund_managers (id) {
+        id -> Text,
+        name -> Text,
+        notes -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
     goals (id) {
         id -> Text,
         title -> Text,
@@ -303,6 +313,53 @@ diesel::table! {
         kind -> Text,
         website_url -> Nullable<Text>,
         logo_url -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    private_assets (id) {
+        id -> Text,
+        name -> Text,
+        fund_manager_id -> Nullable<Text>,
+        vehicle_kind -> Text,
+        strategy_type -> Text,
+        currency -> Text,
+        status -> Text,
+        commitment_amount -> Nullable<Text>,
+        notes -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    private_snapshots (id) {
+        id -> Text,
+        private_asset_id -> Text,
+        contributed_amount -> Text,
+        distributed_amount -> Text,
+        cash_flow_type -> Text,
+        current_value -> Text,
+        as_of_date -> Date,
+        value_source_type -> Text,
+        notes -> Nullable<Text>,
+        created_at -> Text,
+    }
+}
+
+diesel::table! {
+    private_sub_assets (id) {
+        id -> Text,
+        private_asset_id -> Text,
+        name -> Text,
+        reporting_basis -> Text,
+        strategy_type -> Nullable<Text>,
+        cost_basis -> Nullable<Text>,
+        current_value -> Nullable<Text>,
+        ownership_percent -> Nullable<Text>,
+        notes -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
     }
 }
 
@@ -462,6 +519,9 @@ diesel::joinable!(brokers_sync_state -> import_runs (last_run_id));
 diesel::joinable!(goals_allocation -> accounts (account_id));
 diesel::joinable!(goals_allocation -> goals (goal_id));
 diesel::joinable!(import_runs -> accounts (account_id));
+diesel::joinable!(private_assets -> fund_managers (fund_manager_id));
+diesel::joinable!(private_snapshots -> private_assets (private_asset_id));
+diesel::joinable!(private_sub_assets -> private_assets (private_asset_id));
 diesel::joinable!(quotes -> assets (asset_id));
 diesel::joinable!(taxonomy_categories -> taxonomies (taxonomy_id));
 
@@ -481,6 +541,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     contribution_limits,
     market_data_custom_providers,
     daily_account_valuation,
+    fund_managers,
     goals,
     goals_allocation,
     health_issue_dismissals,
@@ -489,6 +550,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     import_runs,
     market_data_providers,
     platforms,
+    private_assets,
+    private_snapshots,
+    private_sub_assets,
     quote_sync_state,
     quotes,
     sync_applied_events,

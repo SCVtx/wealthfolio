@@ -26,6 +26,10 @@ import {
   ImportCsvToolUI,
   IncomeToolUI,
   PerformanceToolUI,
+  PrivateAssetDetailToolUI,
+  PrivateAssetHistoryToolUI,
+  PrivateAssetRowsToolUI,
+  PrivateAssetTotalsToolUI,
   RecordActivityToolUI,
   RecordActivitiesToolUI,
   ValuationToolUI,
@@ -219,6 +223,10 @@ function ChatShellInner({ className }: ChatShellProps) {
         <IncomeToolUI />
         <AllocationToolUI />
         <PerformanceToolUI />
+        <PrivateAssetRowsToolUI />
+        <PrivateAssetDetailToolUI />
+        <PrivateAssetTotalsToolUI />
+        <PrivateAssetHistoryToolUI />
         <RecordActivityToolUI />
         <RecordActivitiesToolUI />
         <ImportCsvToolUI />

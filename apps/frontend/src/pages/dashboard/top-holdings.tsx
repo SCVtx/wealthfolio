@@ -1,9 +1,12 @@
+import { listPrivateAssetRows } from "@/adapters";
 import { TickerAvatar } from "@/components/ticker-avatar";
+import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
 import { Card, CardContent, CardHeader, CardTitle } from "@wealthfolio/ui/components/ui/card";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 import { HoldingType, isAlternativeAssetKind, type AssetKind } from "@/lib/constants";
+import { QueryKeys } from "@/lib/query-keys";
 import { parseOccSymbol } from "@/lib/occ-symbol";
-import { Holding } from "@/lib/types";
+import { Holding, type PrivateAssetFreshnessState, type PrivateAssetListRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
   AmountDisplay,
@@ -14,12 +17,18 @@ import {
   usePersistentState,
 } from "@wealthfolio/ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@wealthfolio/ui/components/ui/popover";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
+import { formatPrivateAssetStrategy } from "../settings/private-assets/private-assets-utils";
 
 const MAX_DISPLAYED_HOLDINGS = 5;
 const MAX_STACKED_AVATARS = 5;
+const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
 
 interface TopHoldingsProps {
   holdings: Holding[];
@@ -27,7 +36,7 @@ interface TopHoldingsProps {
   baseCurrency: string;
 }
 
-interface HoldingRowProps {
+interface PublicHoldingRowProps {
   holding: Holding;
   baseCurrency: string;
   isHidden?: boolean;
@@ -35,13 +44,75 @@ interface HoldingRowProps {
   onClick?: () => void;
 }
 
-function HoldingRow({
+interface PrivateAssetRowProps {
+  row: PrivateAssetListRow;
+  baseCurrency: string;
+  isHidden?: boolean;
+  onClick?: () => void;
+}
+
+interface PublicInvestmentItem {
+  kind: "public";
+  id: string;
+  sortValue: number;
+  sortGain: number;
+  holding: Holding;
+}
+
+interface PrivateInvestmentItem {
+  kind: "private";
+  id: string;
+  sortValue: number;
+  row: PrivateAssetListRow;
+}
+
+type TopInvestmentItem = PublicInvestmentItem | PrivateInvestmentItem;
+
+interface StackedAvatarsProps {
+  investments: TopInvestmentItem[];
+  totalRemaining: number;
+  onClick?: () => void;
+}
+
+function formatAsOfDate(value?: string | null) {
+  if (!value) {
+    return "No reported mark";
+  }
+
+  const parsed = new Date(`${value}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? value : SHORT_DATE_FORMATTER.format(parsed);
+}
+
+function formatFreshnessLabel(state: PrivateAssetFreshnessState) {
+  switch (state) {
+    case "CURRENT":
+      return "Current";
+    case "STALE":
+      return "Stale";
+    case "ESTIMATED":
+      return "Estimated";
+    case "MISSING":
+      return "Missing";
+  }
+}
+
+function getInvestmentAvatarSymbol(item: TopInvestmentItem) {
+  if (item.kind === "public") {
+    const symbol = item.holding.instrument?.symbol ?? item.holding.id;
+    const parsed = parseOccSymbol(symbol);
+    return parsed ? parsed.underlying : symbol;
+  }
+
+  return item.row.name;
+}
+
+function PublicHoldingRow({
   holding,
   baseCurrency,
   isHidden,
   showTotalReturn,
   onClick,
-}: HoldingRowProps) {
+}: PublicHoldingRowProps) {
   const symbol = holding.instrument?.symbol ?? holding.id;
   const parsedOption = parseOccSymbol(symbol);
   const displayName = parsedOption ? parsedOption.underlying : symbol.split(".")[0];
@@ -97,44 +168,71 @@ function HoldingRow({
   );
 }
 
-interface StackedAvatarsProps {
-  holdings: Holding[];
-  totalRemaining: number;
-  onClick?: () => void;
-}
-
-function StackedAvatars({ holdings, totalRemaining, onClick }: StackedAvatarsProps) {
-  const displayedHoldings = holdings.slice(0, MAX_STACKED_AVATARS);
-  const extraCount = totalRemaining - displayedHoldings.length;
+function PrivateAssetRow({ row, baseCurrency, isHidden, onClick }: PrivateAssetRowProps) {
+  const strategyLabel = formatPrivateAssetStrategy(row.strategyType);
+  const relationshipLabel = row.fundManagerName ?? "Direct investment";
+  const currentValue = row.latestSnapshot?.currentValue ?? 0;
+  const freshnessLabel = formatFreshnessLabel(row.freshnessState);
+  const asOfLabel = formatAsOfDate(row.latestSnapshot?.asOfDate);
 
   return (
     <div
-      className="hover:bg-muted/50 border-border flex cursor-pointer items-center gap-2 border-t py-3 transition-colors"
+      className="border-border hover:bg-muted/30 group flex cursor-pointer items-center justify-between border-b py-3 transition-colors last:border-0"
       onClick={onClick}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onClick?.()}
     >
+      <div className="flex items-center gap-3">
+        <TickerAvatar symbol={row.name} className="size-9" />
+        <div className="flex flex-col">
+          <span className="text-sm font-semibold">{row.name}</span>
+          <span className="text-muted-foreground text-xs">{`${strategyLabel} • ${relationshipLabel}`}</span>
+        </div>
+      </div>
+      <div className="flex flex-col items-end gap-1">
+        <AmountDisplay
+          value={currentValue}
+          currency={baseCurrency}
+          isHidden={isHidden}
+          className="text-sm font-semibold"
+        />
+        <span className="text-muted-foreground text-xs">{`${freshnessLabel} • ${asOfLabel}`}</span>
+      </div>
+    </div>
+  );
+}
+
+function StackedAvatars({ investments, totalRemaining, onClick }: StackedAvatarsProps) {
+  const displayedInvestments = investments.slice(0, MAX_STACKED_AVATARS);
+
+  return (
+    <div
+      className={cn(
+        "border-border flex items-center gap-2 border-t py-3 transition-colors",
+        onClick ? "hover:bg-muted/50 cursor-pointer" : "",
+      )}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={(e) => e.key === "Enter" && onClick?.()}
+    >
       <div className="flex items-center">
-        {displayedHoldings.map((holding, index) => {
-          const symbol = holding.instrument?.symbol ?? holding.id;
-          const parsed = parseOccSymbol(symbol);
-          const avatarSym = parsed ? parsed.underlying : symbol;
+        {displayedInvestments.map((item, index) => {
+          const avatarSym = getInvestmentAvatarSymbol(item);
           return (
             <div
-              key={holding.id}
+              key={item.id}
               className={cn("relative", index > 0 && "-ml-2")}
-              style={{ zIndex: displayedHoldings.length - index }}
+              style={{ zIndex: displayedInvestments.length - index }}
             >
               <TickerAvatar symbol={avatarSym} className="ring-background size-8 ring-2" />
             </div>
           );
         })}
       </div>
-      <span className="text-muted-foreground text-xs">
-        {extraCount > 0 ? `+${totalRemaining} more holdings` : `+${totalRemaining} more`}
-      </span>
-      <Icons.ChevronRight className="text-muted-foreground ml-auto h-3 w-3" />
+      <span className="text-muted-foreground text-xs">{`+${totalRemaining} more investments`}</span>
+      {onClick && <Icons.ChevronRight className="text-muted-foreground ml-auto h-3 w-3" />}
     </div>
   );
 }
@@ -143,7 +241,7 @@ function TopHoldingsSkeleton() {
   return (
     <Card className="w-full border-0 bg-transparent shadow-none">
       <CardHeader className="py-2">
-        <CardTitle className="text-md">Top Holdings</CardTitle>
+        <CardTitle className="text-md">Top Investments</CardTitle>
       </CardHeader>
       <CardContent>
         <Card className="shadow-xs w-full">
@@ -179,20 +277,29 @@ function TopHoldingsEmptyState() {
   return (
     <Card className="w-full border-0 bg-transparent p-0 shadow-none">
       <CardHeader className="px-0 py-2">
-        <CardTitle className="text-md">Top Holdings</CardTitle>
+        <CardTitle className="text-md">Top Investments</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         <Card className="border-border/50 bg-success/10 shadow-xs w-full">
           <CardContent className="px-4 py-6">
             <div className="text-center">
-              <p className="text-sm">No holdings yet.</p>
-              <Link
-                to="/activities/manage"
-                className="text-muted-foreground hover:text-foreground mt-2 inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
-              >
-                Add your first transaction
-                <Icons.ChevronRight className="h-3 w-3" />
-              </Link>
+              <p className="text-sm">No investments yet.</p>
+              <div className="mt-2 flex flex-wrap items-center justify-center gap-3">
+                <Link
+                  to="/activities/manage"
+                  className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
+                >
+                  Add your first transaction
+                  <Icons.ChevronRight className="h-3 w-3" />
+                </Link>
+                <Link
+                  to="/settings/private-assets"
+                  className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
+                >
+                  Add your first private asset
+                  <Icons.ChevronRight className="h-3 w-3" />
+                </Link>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -204,6 +311,10 @@ function TopHoldingsEmptyState() {
 export function TopHoldings({ holdings, isLoading, baseCurrency }: TopHoldingsProps) {
   const navigate = useNavigate();
   const { isBalanceHidden } = useBalancePrivacy();
+  const privateRowsQuery = useQuery<PrivateAssetListRow[], Error>({
+    queryKey: QueryKeys.privateAssetRows(false),
+    queryFn: () => listPrivateAssetRows(false),
+  });
   const [showTotalReturn, setShowTotalReturn] = usePersistentState<boolean>(
     "holdings-show-total-return",
     true,
@@ -213,48 +324,68 @@ export function TopHoldings({ holdings, isLoading, baseCurrency }: TopHoldingsPr
     "value",
   );
 
-  // Filter out cash holdings and alternative assets, then sort by market value
-  // Dashboard shows only investment holdings (securities, crypto, etc.)
-  const sortedHoldings = useMemo(() => {
-    return holdings
+  const sortedInvestments = useMemo(() => {
+    const publicInvestments: PublicInvestmentItem[] = holdings
       .filter((h) => {
-        // Exclude cash holdings
         if (h.holdingType === HoldingType.CASH) return false;
-        // Exclude alternative assets (properties, vehicles, liabilities, etc.)
         if (h.assetKind && isAlternativeAssetKind(h.assetKind as AssetKind)) return false;
         return true;
       })
+      .map((holding) => ({
+        kind: "public",
+        id: holding.id,
+        sortValue: holding.marketValue?.base ?? 0,
+        sortGain: showTotalReturn
+          ? (holding.unrealizedGain?.base ?? 0)
+          : (holding.dayChange?.base ?? 0),
+        holding,
+      }));
+
+    const privateInvestments: PrivateInvestmentItem[] = (privateRowsQuery.data ?? []).map((row) => ({
+      kind: "private",
+      id: row.assetId,
+      sortValue: row.latestSnapshot?.currentValue ?? 0,
+      row,
+    }));
+
+    return [...publicInvestments, ...privateInvestments]
       .sort((a, b) => {
         if (sortBy === "gain") {
-          const gainA = showTotalReturn ? (a.unrealizedGain?.base ?? 0) : (a.dayChange?.base ?? 0);
-          const gainB = showTotalReturn ? (b.unrealizedGain?.base ?? 0) : (b.dayChange?.base ?? 0);
-          return gainB - gainA;
+          // Private assets do not have truthful daily/total-return metrics in this widget yet,
+          // so keep them below gain-sorted public holdings instead of inventing one.
+          if (a.kind === "private" && b.kind === "private") {
+            return b.sortValue - a.sortValue;
+          }
+          if (a.kind === "private") return 1;
+          if (b.kind === "private") return -1;
+          return b.sortGain - a.sortGain;
         }
-        return (b.marketValue?.base ?? 0) - (a.marketValue?.base ?? 0);
+        return b.sortValue - a.sortValue;
       });
-  }, [holdings, sortBy, showTotalReturn]);
+  }, [holdings, privateRowsQuery.data, showTotalReturn, sortBy]);
 
-  // Show one extra holding directly rather than displaying "+1 more"
+  const isMixedMode = (privateRowsQuery.data?.length ?? 0) > 0;
+  const showLegacyViewAll = !isMixedMode;
   const displayCount =
-    sortedHoldings.length === MAX_DISPLAYED_HOLDINGS + 1
+    sortedInvestments.length === MAX_DISPLAYED_HOLDINGS + 1
       ? MAX_DISPLAYED_HOLDINGS + 1
       : MAX_DISPLAYED_HOLDINGS;
-  const topHoldings = sortedHoldings.slice(0, displayCount);
-  const remainingHoldings = sortedHoldings.slice(displayCount);
-  const hasRemainingHoldings = remainingHoldings.length > 0;
+  const topInvestments = sortedInvestments.slice(0, displayCount);
+  const remainingInvestments = sortedInvestments.slice(displayCount);
+  const hasRemainingInvestments = remainingInvestments.length > 0;
 
-  if (isLoading) {
+  if (isLoading || privateRowsQuery.isLoading) {
     return <TopHoldingsSkeleton />;
   }
 
-  if (sortedHoldings.length === 0) {
+  if (sortedInvestments.length === 0) {
     return <TopHoldingsEmptyState />;
   }
 
   return (
     <Card className="w-full border-0 bg-transparent p-0 shadow-none">
       <CardHeader className="flex flex-row items-center justify-between px-0 py-2">
-        <CardTitle className="text-md">Holdings</CardTitle>
+        <CardTitle className="text-md">Top Investments</CardTitle>
         <div className="flex items-center gap-1">
           <Popover>
             <PopoverTrigger asChild>
@@ -319,38 +450,51 @@ export function TopHoldings({ holdings, isLoading, baseCurrency }: TopHoldingsPr
               ))}
             </PopoverContent>
           </Popover>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground hover:bg-success/10 text-xs"
-            onClick={() => navigate("/holdings")}
-          >
-            View All
-            <Icons.ChevronRight className="ml-1 h-3 w-3" />
-          </Button>
+          {showLegacyViewAll && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:bg-success/10 text-xs"
+              onClick={() => navigate("/holdings")}
+            >
+              View All
+              <Icons.ChevronRight className="ml-1 h-3 w-3" />
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent className="p-0">
         <Card className="shadow-xs w-full">
           <CardContent className="px-4 pb-2 pt-4">
-            {topHoldings.map((holding) => {
-              const assetId = holding.instrument?.id ?? holding.id;
-              return (
-                <HoldingRow
-                  key={holding.id}
-                  holding={holding}
+            {topInvestments.map((item) =>
+              item.kind === "public" ? (
+                <PublicHoldingRow
+                  key={item.id}
+                  holding={item.holding}
                   baseCurrency={baseCurrency}
                   isHidden={isBalanceHidden}
                   showTotalReturn={showTotalReturn}
-                  onClick={() => navigate(`/holdings/${encodeURIComponent(assetId)}`)}
+                  onClick={() =>
+                    navigate(
+                      `/holdings/${encodeURIComponent(item.holding.instrument?.id ?? item.holding.id)}`,
+                    )
+                  }
                 />
-              );
-            })}
-            {hasRemainingHoldings && (
+              ) : (
+                <PrivateAssetRow
+                  key={item.id}
+                  row={item.row}
+                  baseCurrency={baseCurrency}
+                  isHidden={isBalanceHidden}
+                  onClick={() => navigate(`/settings/private-assets/${encodeURIComponent(item.id)}`)}
+                />
+              ),
+            )}
+            {hasRemainingInvestments && (
               <StackedAvatars
-                holdings={remainingHoldings}
-                totalRemaining={remainingHoldings.length}
-                onClick={() => navigate("/holdings")}
+                investments={remainingInvestments}
+                totalRemaining={remainingInvestments.length}
+                onClick={showLegacyViewAll ? () => navigate("/holdings") : undefined}
               />
             )}
           </CardContent>

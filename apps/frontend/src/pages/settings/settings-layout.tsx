@@ -61,6 +61,12 @@ const settingsSections = [
         icon: <Icons.BadgeDollarSign className="size-5" />,
       },
       {
+        title: "Private Assets",
+        href: "private-assets",
+        subtitle: "Managers, private vehicles, and snapshots",
+        icon: <Icons.Briefcase className="size-5" />,
+      },
+      {
         title: "Classifications",
         href: "taxonomies",
         subtitle: "Asset classification hierarchies",

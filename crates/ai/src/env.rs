@@ -16,6 +16,7 @@ use wealthfolio_core::{
         income::IncomeServiceTrait, performance::PerformanceServiceTrait,
         valuation::ValuationServiceTrait,
     },
+    private_assets::PrivateAssetProjectionServiceTrait,
     quotes::QuoteServiceTrait,
     secrets::SecretStore,
     settings::SettingsServiceTrait,
@@ -74,6 +75,9 @@ pub trait AiEnvironment: Send + Sync {
 
     /// Get the health service for portfolio health diagnostics.
     fn health_service(&self) -> Arc<dyn HealthServiceTrait>;
+
+    /// Get the private-assets projection service for read-only private-asset views.
+    fn private_asset_projection_service(&self) -> Arc<dyn PrivateAssetProjectionServiceTrait>;
 }
 
 #[cfg(test)]
@@ -106,6 +110,10 @@ pub mod test_env {
         portfolio::allocation::{AllocationHoldings, AllocationServiceTrait, PortfolioAllocations},
         portfolio::income::{IncomeServiceTrait, IncomeSummary},
         portfolio::performance::{PerformanceMetrics, PerformanceServiceTrait},
+        private_assets::{
+            PrivateAssetCurrentTotals, PrivateAssetDetail, PrivateAssetHistoricalPoint,
+            PrivateAssetListRow, PrivateAssetProjectionServiceTrait,
+        },
         quotes::{
             LatestQuotePair, LatestQuoteSnapshot, ProviderInfo, Quote, QuoteImport,
             QuoteServiceTrait, QuoteSyncState, SymbolSearchResult, SymbolSyncPlan, SyncMode,
@@ -1164,6 +1172,7 @@ pub mod test_env {
         pub performance_service: Arc<dyn PerformanceServiceTrait>,
         pub income_service: Arc<dyn IncomeServiceTrait>,
         pub health_service: Arc<dyn HealthServiceTrait>,
+        pub private_asset_projection_service: Arc<dyn PrivateAssetProjectionServiceTrait>,
     }
 
     impl Default for MockEnvironment {
@@ -1189,6 +1198,7 @@ pub mod test_env {
                 performance_service: Arc::new(MockPerformanceService),
                 income_service: Arc::new(MockIncomeService),
                 health_service: Arc::new(MockHealthService::default()),
+                private_asset_projection_service: Arc::new(MockPrivateAssetProjectionService),
             }
         }
 
@@ -1254,6 +1264,42 @@ pub mod test_env {
 
         fn health_service(&self) -> Arc<dyn HealthServiceTrait> {
             self.health_service.clone()
+        }
+
+        fn private_asset_projection_service(&self) -> Arc<dyn PrivateAssetProjectionServiceTrait> {
+            self.private_asset_projection_service.clone()
+        }
+    }
+
+    struct MockPrivateAssetProjectionService;
+
+    #[async_trait::async_trait]
+    impl PrivateAssetProjectionServiceTrait for MockPrivateAssetProjectionService {
+        fn list_private_asset_rows(&self, _include_archived: bool) -> CoreResult<Vec<PrivateAssetListRow>> {
+            Ok(Vec::new())
+        }
+
+        fn get_private_asset_detail(&self, _private_asset_id: &str) -> CoreResult<Option<PrivateAssetDetail>> {
+            Ok(None)
+        }
+
+        fn get_private_asset_current_totals(
+            &self,
+            _include_archived: bool,
+        ) -> CoreResult<PrivateAssetCurrentTotals> {
+            Ok(PrivateAssetCurrentTotals {
+                total_current_value: rust_decimal::Decimal::ZERO,
+                total_contributed: rust_decimal::Decimal::ZERO,
+                total_distributed: rust_decimal::Decimal::ZERO,
+                latest_as_of_date: None,
+            })
+        }
+
+        fn get_private_asset_historical_series(
+            &self,
+            _include_archived: bool,
+        ) -> CoreResult<Vec<PrivateAssetHistoricalPoint>> {
+            Ok(Vec::new())
         }
     }
 

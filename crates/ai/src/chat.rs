@@ -358,9 +358,14 @@ impl<E: AiEnvironment + 'static> ChatService<E> {
             "get_income".to_string(),
             "get_asset_allocation".to_string(),
             "get_performance".to_string(),
+            "list_private_asset_rows".to_string(),
+            "get_private_asset_detail".to_string(),
+            "get_private_asset_current_totals".to_string(),
+            "get_private_asset_historical_series".to_string(),
             "record_activity".to_string(),
             "record_activities".to_string(),
             "import_csv".to_string(),
+            "get_health_status".to_string(),
         ]
     }
 
@@ -732,6 +737,18 @@ async fn spawn_chat_stream<E: AiEnvironment + 'static>(
             }
             if is_allowed("get_performance") {
                 allowed_tools.push(Box::new(tool_set.performance));
+            }
+            if is_allowed("list_private_asset_rows") {
+                allowed_tools.push(Box::new(tool_set.private_asset_rows));
+            }
+            if is_allowed("get_private_asset_detail") {
+                allowed_tools.push(Box::new(tool_set.private_asset_detail));
+            }
+            if is_allowed("get_private_asset_current_totals") {
+                allowed_tools.push(Box::new(tool_set.private_asset_current_totals));
+            }
+            if is_allowed("get_private_asset_historical_series") {
+                allowed_tools.push(Box::new(tool_set.private_asset_historical_series));
             }
             if is_allowed("record_activity") {
                 allowed_tools.push(Box::new(tool_set.record_activity));

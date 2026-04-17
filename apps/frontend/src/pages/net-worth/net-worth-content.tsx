@@ -1,8 +1,11 @@
+import { listPrivateAssetRows } from "@/adapters";
 import { useNetWorth, useNetWorthHistory } from "@/hooks/use-alternative-assets";
+import { QueryKeys } from "@/lib/query-keys";
 import { useSettingsContext } from "@/lib/settings-provider";
 import type { DateRange } from "@/lib/types";
 import { formatDateISO } from "@/lib/utils";
 import Balance from "@/pages/dashboard/balance";
+import { useQuery } from "@tanstack/react-query";
 import {
   GainAmount,
   GainPercent,
@@ -297,6 +300,10 @@ interface NetWorthContentProps {
 export function NetWorthContent({ onAddAsset, onAddLiability }: NetWorthContentProps) {
   const { settings } = useSettingsContext();
   const { data: netWorthData, isLoading, isError, error } = useNetWorth();
+  const privateRowsQuery = useQuery({
+    queryKey: QueryKeys.privateAssetRows(false),
+    queryFn: () => listPrivateAssetRows(false),
+  });
 
   // Use the same persisted state as IntervalSelector for the interval code
   const [intervalCode] = usePersistentState<TimePeriod>(INTERVAL_STORAGE_KEY, DEFAULT_INTERVAL);
@@ -388,6 +395,10 @@ export function NetWorthContent({ onAddAsset, onAddLiability }: NetWorthContentP
 
   const currency = netWorthData?.currency || settings?.baseCurrency || "USD";
   const hasStaleValuations = netWorthData && netWorthData.staleAssets.length > 0;
+  const privateAssetIds = useMemo(
+    () => new Set((privateRowsQuery.data ?? []).map((row) => row.assetId)),
+    [privateRowsQuery.data],
+  );
 
   // Error state
   if (isError && error) {
@@ -577,7 +588,11 @@ export function NetWorthContent({ onAddAsset, onAddLiability }: NetWorthContentP
                         {netWorthData?.staleAssets.map((asset) => (
                           <Link
                             key={asset.assetId}
-                            to={`/holdings/${encodeURIComponent(asset.assetId)}?tab=history`}
+                            to={
+                              privateAssetIds.has(asset.assetId)
+                                ? `/settings/private-assets/${asset.assetId}`
+                                : `/holdings/${encodeURIComponent(asset.assetId)}?tab=history`
+                            }
                             className="hover:bg-warning/10 flex items-center justify-between rounded-md px-2 py-1.5 transition-colors"
                           >
                             <span className="truncate text-xs font-medium">

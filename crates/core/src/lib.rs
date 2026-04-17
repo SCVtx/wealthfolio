@@ -17,6 +17,7 @@ pub mod goals;
 pub mod health;
 pub mod limits;
 pub mod portfolio;
+pub mod private_assets;
 pub mod quotes;
 pub mod secrets;
 pub mod settings;

@@ -28,6 +28,7 @@ use wealthfolio_core::{
         snapshot::SnapshotService,
         valuation::ValuationService,
     },
+    private_assets::{PrivateAssetProjectionService, PrivateAssetsService},
     quotes::{QuoteService, QuoteServiceTrait},
     settings::{SettingsRepositoryTrait, SettingsService, SettingsServiceTrait},
     taxonomies::TaxonomyService,
@@ -45,6 +46,10 @@ use wealthfolio_storage_sqlite::{
     limits::ContributionLimitRepository,
     market_data::{MarketDataRepository, QuoteSyncStateRepository},
     portfolio::{snapshot::SnapshotRepository, valuation::ValuationRepository},
+    private_assets::{
+        FundManagerRepository, PrivateAssetRepository, PrivateSnapshotRepository,
+        PrivateSubAssetRepository,
+    },
     settings::SettingsRepository,
     sync::{AppSyncRepository, BrokerSyncStateRepository, ImportRunRepository, PlatformRepository},
     taxonomies::TaxonomyRepository,
@@ -247,16 +252,6 @@ pub async fn initialize_context(
         taxonomy_service.clone(),
     ));
 
-    let net_worth_service = Arc::new(NetWorthService::new(
-        base_currency.clone(),
-        account_repository.clone(),
-        asset_repository.clone(),
-        snapshot_repository.clone(),
-        quote_service.clone(),
-        valuation_repository.clone(),
-        fx_service.clone(),
-    ));
-
     let alternative_asset_repository = Arc::new(AlternativeAssetRepository::new(
         pool.clone(),
         writer.clone(),
@@ -269,6 +264,42 @@ pub async fn initialize_context(
             quote_service.clone(),
         )
         .with_event_sink(domain_event_sink.clone()),
+    );
+
+    let fund_manager_repository =
+        Arc::new(FundManagerRepository::new(pool.clone(), writer.clone()));
+    let private_asset_repository =
+        Arc::new(PrivateAssetRepository::new(pool.clone(), writer.clone()));
+    let private_sub_asset_repository =
+        Arc::new(PrivateSubAssetRepository::new(pool.clone(), writer.clone()));
+    let private_snapshot_repository =
+        Arc::new(PrivateSnapshotRepository::new(pool.clone(), writer.clone()));
+    let private_assets_service = Arc::new(PrivateAssetsService::new(
+        base_currency.clone(),
+        fund_manager_repository.clone(),
+        private_asset_repository.clone(),
+        private_sub_asset_repository.clone(),
+        private_snapshot_repository.clone(),
+    ));
+    let private_asset_projection_service = Arc::new(PrivateAssetProjectionService::new(
+        base_currency.clone(),
+        fund_manager_repository,
+        private_asset_repository,
+        private_sub_asset_repository,
+        private_snapshot_repository,
+    ));
+
+    let net_worth_service = Arc::new(
+        NetWorthService::new(
+            base_currency.clone(),
+            account_repository.clone(),
+            asset_repository.clone(),
+            snapshot_repository.clone(),
+            quote_service.clone(),
+            valuation_repository.clone(),
+            fx_service.clone(),
+        )
+        .with_private_asset_projection_service(private_asset_projection_service.clone()),
     );
 
     let sync_service = Arc::new(
@@ -321,6 +352,7 @@ pub async fn initialize_context(
         performance_service.clone(),
         income_service.clone(),
         health_service.clone(),
+        private_asset_projection_service.clone(),
     ));
     let ai_chat_service = Arc::new(ChatService::new(ai_environment, ChatConfig::default()));
 
@@ -361,6 +393,8 @@ pub async fn initialize_context(
             net_worth_service,
             sync_service,
             alternative_asset_service,
+            private_assets_service,
+            private_asset_projection_service,
             taxonomy_service,
             connect_service,
             ai_provider_service,

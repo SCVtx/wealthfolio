@@ -20,6 +20,7 @@ use crate::fx::currency::normalize_amount;
 use crate::fx::FxServiceTrait;
 use crate::portfolio::snapshot::SnapshotRepositoryTrait;
 use crate::portfolio::valuation::ValuationRepositoryTrait;
+use crate::private_assets::PrivateAssetProjectionServiceTrait;
 use crate::quotes::QuoteServiceTrait;
 
 /// Number of days after which a valuation is considered stale.
@@ -34,6 +35,8 @@ pub struct NetWorthService {
     quote_service: Arc<dyn QuoteServiceTrait>,
     valuation_repository: Arc<dyn ValuationRepositoryTrait>,
     fx_service: Arc<dyn FxServiceTrait>,
+    private_asset_projection_service:
+        Option<Arc<dyn PrivateAssetProjectionServiceTrait + Send + Sync>>,
 }
 
 impl NetWorthService {
@@ -56,7 +59,16 @@ impl NetWorthService {
             quote_service,
             valuation_repository,
             fx_service,
+            private_asset_projection_service: None,
         }
+    }
+
+    pub fn with_private_asset_projection_service(
+        mut self,
+        private_asset_projection_service: Arc<dyn PrivateAssetProjectionServiceTrait + Send + Sync>,
+    ) -> Self {
+        self.private_asset_projection_service = Some(private_asset_projection_service);
+        self
     }
 
     /// Determine the asset category based on account type.
@@ -131,6 +143,7 @@ impl NetWorthService {
         match category {
             AssetCategory::Cash => "Cash",
             AssetCategory::Investment => "Investments",
+            AssetCategory::PrivateAssets => "Private Assets",
             AssetCategory::Property => "Properties",
             AssetCategory::Vehicle => "Vehicles",
             AssetCategory::Collectible => "Collectibles",
@@ -145,6 +158,7 @@ impl NetWorthService {
         match category {
             AssetCategory::Cash => "cash",
             AssetCategory::Investment => "investments",
+            AssetCategory::PrivateAssets => "privateAssets",
             AssetCategory::Property => "properties",
             AssetCategory::Vehicle => "vehicles",
             AssetCategory::Collectible => "collectibles",
@@ -254,11 +268,6 @@ impl NetWorthServiceTrait for NetWorthService {
 
         // Get all non-archived accounts (includes closed accounts for historical net worth)
         let accounts = self.account_repository.list(None, Some(false), None)?;
-
-        if accounts.is_empty() {
-            debug!("No non-archived accounts found. Returning empty net worth.");
-            return Ok(NetWorthResponse::empty(date, base_currency));
-        }
 
         // Get account IDs
         let account_ids: Vec<String> = accounts.iter().map(|a| a.id.clone()).collect();
@@ -473,6 +482,42 @@ impl NetWorthServiceTrait for NetWorthService {
             });
         }
 
+        if let Some(private_asset_projection_service) = &self.private_asset_projection_service {
+            for row in private_asset_projection_service.list_private_asset_rows(false)? {
+                let Some(snapshot) = row.latest_snapshot else {
+                    continue;
+                };
+
+                let market_value_base = if row.currency == base_currency {
+                    snapshot.current_value
+                } else {
+                    match self.fx_service.convert_currency_for_date(
+                        snapshot.current_value,
+                        &row.currency,
+                        &base_currency,
+                        snapshot.as_of_date,
+                    ) {
+                        Ok(value) => value.round_dp(DECIMAL_PRECISION),
+                        Err(error) => {
+                            warn!(
+                                "Failed to convert private asset {} value to base currency: {}. Using local value.",
+                                row.asset_id, error
+                            );
+                            snapshot.current_value
+                        }
+                    }
+                };
+
+                valuations.push(ValuationInfo {
+                    asset_id: row.asset_id,
+                    name: Some(row.name),
+                    market_value_base,
+                    valuation_date: snapshot.as_of_date,
+                    category: AssetCategory::PrivateAssets,
+                });
+            }
+        }
+
         // Build assets and liabilities sections
         let assets = Self::build_assets_section(&valuations);
         let liabilities = Self::build_liabilities_section(&valuations);
@@ -569,6 +614,17 @@ impl NetWorthServiceTrait for NetWorthService {
             .map(|a| (a.id.clone(), a.quote_ccy.clone()))
             .collect();
 
+        let private_asset_series = self
+            .private_asset_projection_service
+            .as_ref()
+            .map(|service| service.get_private_asset_historical_series(true))
+            .transpose()?
+            .unwrap_or_default();
+        let private_asset_values_by_date: BTreeMap<NaiveDate, Decimal> = private_asset_series
+            .iter()
+            .map(|point| (point.as_of_date, point.total_current_value))
+            .collect();
+
         // =====================================================================
         // 3. Load quotes for alternative assets
         // =====================================================================
@@ -651,13 +707,22 @@ impl NetWorthServiceTrait for NetWorthService {
                     all_dates.push(*date);
                 }
             }
+
+            for date in private_asset_values_by_date.keys() {
+                if *date >= first_pf_date && !all_dates.contains(date) {
+                    all_dates.push(*date);
+                }
+            }
         } else {
             // Edge case: no portfolio data, only alternative assets
-            // Use all quote dates
+            // Use all quote dates and private asset history dates
             all_dates.extend(quotes_by_date.keys().cloned());
+            all_dates.extend(private_asset_values_by_date.keys().cloned());
 
             // Also add start_date if we have initial values but no quotes in range
-            if all_dates.is_empty() && !initial_asset_values.is_empty() {
+            if all_dates.is_empty()
+                && (!initial_asset_values.is_empty() || !private_asset_values_by_date.is_empty())
+            {
                 all_dates.push(start_date);
             }
         }
@@ -676,6 +741,13 @@ impl NetWorthServiceTrait for NetWorthService {
         let mut portfolio_initialized = false;
 
         let mut current_asset_values = initial_asset_values.clone();
+        let private_assets_initial_date = first_portfolio_date.unwrap_or(start_date);
+        let mut current_private_assets_value = private_asset_series
+            .iter()
+            .filter(|point| point.as_of_date <= private_assets_initial_date)
+            .map(|point| point.total_current_value)
+            .next_back()
+            .unwrap_or(Decimal::ZERO);
 
         let mut history: Vec<NetWorthHistoryPoint> = Vec::new();
 
@@ -691,6 +763,10 @@ impl NetWorthServiceTrait for NetWorthService {
                 for (symbol, value) in quotes_on_date {
                     current_asset_values.insert(symbol.clone(), *value);
                 }
+            }
+
+            if let Some(private_assets_value) = private_asset_values_by_date.get(&date) {
+                current_private_assets_value = *private_assets_value;
             }
 
             // Skip if portfolio not yet initialized (Rule 1)
@@ -711,13 +787,14 @@ impl NetWorthServiceTrait for NetWorthService {
                 }
             }
 
-            let total_assets = current_portfolio.value + alt_assets_value;
+            let total_assets = current_portfolio.value + alt_assets_value + current_private_assets_value;
             let net_worth = total_assets - liabilities_value;
 
             history.push(NetWorthHistoryPoint {
                 date,
                 portfolio_value: current_portfolio.value.round_dp(DECIMAL_PRECISION),
                 alternative_assets_value: alt_assets_value.round_dp(DECIMAL_PRECISION),
+                private_assets_value: current_private_assets_value.round_dp(DECIMAL_PRECISION),
                 total_liabilities: liabilities_value.round_dp(DECIMAL_PRECISION),
                 total_assets: total_assets.round_dp(DECIMAL_PRECISION),
                 net_worth: net_worth.round_dp(DECIMAL_PRECISION),

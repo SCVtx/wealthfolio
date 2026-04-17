@@ -70,6 +70,26 @@ const DATA_ACCESS_OPTIONS = [
     description: "Portfolio allocation breakdown",
   },
   { toolId: "get_valuation_history", label: "History", description: "Portfolio value over time" },
+  {
+    toolId: "list_private_asset_rows",
+    label: "Private Assets",
+    description: "Private asset list, freshness, and latest marks",
+  },
+  {
+    toolId: "get_private_asset_detail",
+    label: "Private Detail",
+    description: "Snapshots, fund manager, and sub-asset detail",
+  },
+  {
+    toolId: "get_private_asset_current_totals",
+    label: "Private Totals",
+    description: "Current private-assets totals and latest as-of date",
+  },
+  {
+    toolId: "get_private_asset_historical_series",
+    label: "Private History",
+    description: "Historical private-assets carry-forward series",
+  },
 ];
 
 export function ProviderSettingsCard({

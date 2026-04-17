@@ -10,8 +10,9 @@ use wealthfolio_core::{
     accounts::AccountServiceTrait, activities::ActivityServiceTrait,
     allocation::AllocationServiceTrait, goals::GoalServiceTrait, health::HealthServiceTrait,
     holdings::HoldingsServiceTrait, income::IncomeServiceTrait,
-    performance::PerformanceServiceTrait, quotes::QuoteServiceTrait, secrets::SecretStore,
-    settings::SettingsServiceTrait, valuation::ValuationServiceTrait,
+    performance::PerformanceServiceTrait, private_assets::PrivateAssetProjectionServiceTrait,
+    quotes::QuoteServiceTrait, secrets::SecretStore, settings::SettingsServiceTrait,
+    valuation::ValuationServiceTrait,
 };
 
 /// Tauri-side implementation of AiEnvironment.
@@ -33,6 +34,7 @@ pub struct TauriAiEnvironment {
     performance_service: Arc<dyn PerformanceServiceTrait + Send + Sync>,
     income_service: Arc<dyn IncomeServiceTrait + Send + Sync>,
     health_service: Arc<dyn HealthServiceTrait + Send + Sync>,
+    private_asset_projection_service: Arc<dyn PrivateAssetProjectionServiceTrait + Send + Sync>,
 }
 
 impl TauriAiEnvironment {
@@ -53,6 +55,7 @@ impl TauriAiEnvironment {
         performance_service: Arc<dyn PerformanceServiceTrait + Send + Sync>,
         income_service: Arc<dyn IncomeServiceTrait + Send + Sync>,
         health_service: Arc<dyn HealthServiceTrait + Send + Sync>,
+        private_asset_projection_service: Arc<dyn PrivateAssetProjectionServiceTrait + Send + Sync>,
     ) -> Self {
         Self {
             base_currency,
@@ -69,6 +72,7 @@ impl TauriAiEnvironment {
             performance_service,
             income_service,
             health_service,
+            private_asset_projection_service,
         }
     }
 }
@@ -128,5 +132,9 @@ impl AiEnvironment for TauriAiEnvironment {
 
     fn health_service(&self) -> Arc<dyn HealthServiceTrait> {
         self.health_service.clone()
+    }
+
+    fn private_asset_projection_service(&self) -> Arc<dyn PrivateAssetProjectionServiceTrait> {
+        self.private_asset_projection_service.clone()
     }
 }
