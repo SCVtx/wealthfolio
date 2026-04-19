@@ -484,7 +484,18 @@ impl NetWorthServiceTrait for NetWorthService {
 
         if let Some(private_asset_projection_service) = &self.private_asset_projection_service {
             for row in private_asset_projection_service.list_private_asset_rows(false)? {
-                let Some(snapshot) = row.latest_snapshot else {
+                let snapshot = private_asset_projection_service
+                    .get_private_asset_detail(&row.asset_id)?
+                    .and_then(|detail| {
+                        detail
+                            .snapshots
+                            .into_iter()
+                            .filter(|snapshot| snapshot.as_of_date <= date)
+                            .max_by_key(|snapshot| (snapshot.as_of_date, snapshot.created_at))
+                    })
+                    .or_else(|| row.latest_snapshot.clone().filter(|snapshot| snapshot.as_of_date <= date));
+
+                let Some(snapshot) = snapshot else {
                     continue;
                 };
 

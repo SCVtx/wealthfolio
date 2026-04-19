@@ -148,8 +148,8 @@ export function DashboardContent() {
   });
 
   const privateHistoryQuery = useQuery<PrivateAssetHistoricalPoint[], Error>({
-    queryKey: QueryKeys.privateAssetHistory(false),
-    queryFn: () => getPrivateAssetHistoricalSeries(false),
+    queryKey: QueryKeys.privateAssetHistory(true),
+    queryFn: () => getPrivateAssetHistoricalSeries(true),
   });
 
   // Filter holdings for display (exclude alternative assets and cash for TopHoldings)
@@ -165,15 +165,6 @@ export function DashboardContent() {
   }, [allHoldings]);
 
   const latestPortfolioValuation = latestValuations?.[0];
-
-  // Total investments value = public portfolio (cash + investments) + private assets.
-  const totalValue = useMemo(() => {
-    if (!netWorthData) return 0;
-
-    return (netWorthData.assets.breakdown ?? [])
-      .filter((item) => INVESTMENT_CATEGORY_KEYS.has(item.category))
-      .reduce((sum, item) => sum + parseDecimal(item.value), 0);
-  }, [netWorthData]);
 
   const { settings } = useSettingsContext();
   const baseCurrency = settings?.baseCurrency ?? "USD";
@@ -206,6 +197,20 @@ export function DashboardContent() {
         currency: item.currency || baseCurrency,
       }));
   }, [baseCurrency, dashboardHistory]);
+
+  // Keep the headline balance aligned with the chart/performance series when
+  // archived-inclusive private history is present.
+  const totalValue = useMemo(() => {
+    if (dashboardHistory.length > 0) {
+      return dashboardHistory[dashboardHistory.length - 1]?.totalValue ?? 0;
+    }
+
+    if (!netWorthData) return 0;
+
+    return (netWorthData.assets.breakdown ?? [])
+      .filter((item) => INVESTMENT_CATEGORY_KEYS.has(item.category))
+      .reduce((sum, item) => sum + parseDecimal(item.value), 0);
+  }, [dashboardHistory, netWorthData]);
 
   const isNegative = totalValue < 0;
   const isChartLoading = isNetWorthHistoryLoading || privateHistoryQuery.isLoading;

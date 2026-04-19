@@ -857,6 +857,64 @@ mod tests {
     }
 
     #[test]
+    fn later_total_to_date_statement_replaces_prior_period_only_running_totals() {
+        let service = make_service(
+            vec![make_asset(
+                "asset-1",
+                "Fund A",
+                Some("manager-1"),
+                PrivateAssetStatus::Active,
+            )],
+            vec![make_manager("manager-1", "North Capital")],
+            Vec::new(),
+            vec![
+                make_snapshot(
+                    "snap-1",
+                    "asset-1",
+                    NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+                    dec!(100),
+                    dec!(100),
+                    dec!(0),
+                    PrivateSnapshotCashFlowType::TotalToDate,
+                    PrivateSnapshotValueSourceType::Statement,
+                ),
+                make_snapshot(
+                    "snap-2",
+                    "asset-1",
+                    NaiveDate::from_ymd_opt(2026, 2, 1).unwrap(),
+                    dec!(130),
+                    dec!(25),
+                    dec!(10),
+                    PrivateSnapshotCashFlowType::PeriodOnly,
+                    PrivateSnapshotValueSourceType::Statement,
+                ),
+                make_snapshot(
+                    "snap-3",
+                    "asset-1",
+                    NaiveDate::from_ymd_opt(2026, 3, 1).unwrap(),
+                    dec!(150),
+                    dec!(130),
+                    dec!(12),
+                    PrivateSnapshotCashFlowType::TotalToDate,
+                    PrivateSnapshotValueSourceType::Statement,
+                ),
+            ],
+        );
+
+        let totals = service.get_private_asset_current_totals(false).unwrap();
+        assert_eq!(totals.total_current_value, dec!(150));
+        assert_eq!(totals.total_contributed, dec!(130));
+        assert_eq!(totals.total_distributed, dec!(12));
+
+        let series = service.get_private_asset_historical_series(false).unwrap();
+        assert_eq!(series.len(), 3);
+        assert_eq!(series[1].total_contributed, dec!(125));
+        assert_eq!(series[1].total_distributed, dec!(10));
+        assert_eq!(series[2].total_contributed, dec!(130));
+        assert_eq!(series[2].total_distributed, dec!(12));
+    }
+
+    #[test]
     fn current_totals_reject_non_base_currency_assets() {
         let service = make_service(
             vec![PrivateAsset {

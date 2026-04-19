@@ -732,6 +732,7 @@ impl MockValuationRepository {
 
 struct MockPrivateAssetProjectionService {
     rows: Vec<PrivateAssetListRow>,
+    details_by_asset: HashMap<String, PrivateAssetDetail>,
     history: Vec<PrivateAssetHistoricalPoint>,
     historical_include_archived_calls: Arc<Mutex<Vec<bool>>>,
 }
@@ -744,9 +745,9 @@ impl PrivateAssetProjectionServiceTrait for MockPrivateAssetProjectionService {
 
     fn get_private_asset_detail(
         &self,
-        _private_asset_id: &str,
+        private_asset_id: &str,
     ) -> Result<Option<PrivateAssetDetail>> {
-        Ok(None)
+        Ok(self.details_by_asset.get(private_asset_id).cloned())
     }
 
     fn get_private_asset_current_totals(
@@ -1049,6 +1050,39 @@ fn create_private_asset_row(
     }
 }
 
+fn create_private_asset_detail(
+    asset_id: &str,
+    name: &str,
+    currency: &str,
+    snapshots: Vec<PrivateSnapshot>,
+) -> PrivateAssetDetail {
+    let latest_snapshot = snapshots
+        .iter()
+        .max_by_key(|snapshot| (snapshot.as_of_date, snapshot.created_at))
+        .cloned();
+
+    PrivateAssetDetail {
+        asset: crate::private_assets::PrivateAsset {
+            id: asset_id.to_string(),
+            name: name.to_string(),
+            fund_manager_id: Some("manager-1".to_string()),
+            vehicle_kind: PrivateAssetVehicleKind::Fund,
+            strategy_type: PrivateAssetStrategyType::PrivateEquity,
+            currency: currency.to_string(),
+            status: PrivateAssetStatus::Active,
+            commitment_amount: latest_snapshot.as_ref().map(|snapshot| snapshot.current_value),
+            notes: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        },
+        fund_manager: None,
+        sub_assets: vec![],
+        latest_snapshot,
+        snapshots,
+        freshness_state: crate::private_assets::PrivateAssetFreshnessState::Current,
+    }
+}
+
 fn create_net_worth_service(
     accounts: Vec<Account>,
     assets: Vec<Asset>,
@@ -1073,6 +1107,7 @@ fn create_net_worth_service_with_valuations(
         valuations,
         vec![],
         vec![],
+        vec![],
     )
 }
 
@@ -1083,6 +1118,7 @@ fn create_net_worth_service_with_private_projection(
     quotes: Vec<Quote>,
     valuations: Vec<DailyAccountValuation>,
     private_rows: Vec<PrivateAssetListRow>,
+    private_details: Vec<PrivateAssetDetail>,
     private_history: Vec<PrivateAssetHistoricalPoint>,
 ) -> NetWorthService {
     let base_currency = Arc::new(RwLock::new("USD".to_string()));
@@ -1108,6 +1144,10 @@ fn create_net_worth_service_with_private_projection(
     } else {
         service.with_private_asset_projection_service(Arc::new(MockPrivateAssetProjectionService {
             rows: private_rows,
+            details_by_asset: private_details
+                .into_iter()
+                .map(|detail| (detail.asset.id.clone(), detail))
+                .collect(),
             history: private_history,
             historical_include_archived_calls: Arc::new(Mutex::new(vec![])),
         }))
@@ -2045,6 +2085,7 @@ async fn test_net_worth_includes_private_assets_in_main_balance_sheet() {
         vec![],
         vec![private_row],
         vec![],
+        vec![],
     );
 
     let result = service
@@ -2073,6 +2114,7 @@ fn test_net_worth_history_includes_private_assets_with_carry_forward_marks() {
             create_total_valuation(d2, dec!(1010), dec!(100)),
             create_total_valuation(d3, dec!(1020), dec!(100)),
         ],
+        vec![],
         vec![],
         vec![
             PrivateAssetHistoricalPoint {
@@ -2127,6 +2169,7 @@ fn test_net_worth_history_requests_private_asset_history_including_archived_asse
     )
     .with_private_asset_projection_service(Arc::new(MockPrivateAssetProjectionService {
         rows: vec![],
+        details_by_asset: HashMap::new(),
         history: vec![PrivateAssetHistoricalPoint {
             as_of_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
             total_current_value: dec!(500),
@@ -2144,6 +2187,56 @@ fn test_net_worth_history_requests_private_asset_history_including_archived_asse
         .unwrap();
 
     assert_eq!(history_calls.lock().unwrap().as_slice(), &[true]);
+}
+
+#[tokio::test]
+async fn test_net_worth_private_assets_respect_requested_as_of_date() {
+    let older_snapshot = create_private_snapshot(
+        "private-1",
+        dec!(100000),
+        NaiveDate::from_ymd_opt(2024, 1, 10).unwrap(),
+    );
+    let future_snapshot = create_private_snapshot(
+        "private-1",
+        dec!(250000),
+        NaiveDate::from_ymd_opt(2024, 3, 31).unwrap(),
+    );
+    let private_row = create_private_asset_row(
+        "private-1",
+        "North Fund I",
+        dec!(250000),
+        NaiveDate::from_ymd_opt(2024, 3, 31).unwrap(),
+    );
+    let private_detail = create_private_asset_detail(
+        "private-1",
+        "North Fund I",
+        "USD",
+        vec![older_snapshot.clone(), future_snapshot],
+    );
+
+    let service = create_net_worth_service_with_private_projection(
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![private_row],
+        vec![private_detail],
+        vec![],
+    );
+
+    let result = service
+        .get_net_worth(NaiveDate::from_ymd_opt(2024, 1, 15).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(result.assets.total, dec!(100000));
+    assert_eq!(result.net_worth, dec!(100000));
+    assert_eq!(get_category_value(&result, "privateAssets"), dec!(100000));
+    assert_eq!(
+        result.oldest_valuation_date,
+        Some(NaiveDate::from_ymd_opt(2024, 1, 10).unwrap())
+    );
 }
 
 #[tokio::test]

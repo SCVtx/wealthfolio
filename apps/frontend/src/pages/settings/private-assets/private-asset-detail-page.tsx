@@ -273,7 +273,7 @@ export default function PrivateAssetDetailPage() {
                     value={formatPrivateAmount(latestSnapshot.distributedAmount, detail.asset.currency, isBalanceHidden)}
                   />
                   <MetadataItem
-                    label="Cash Flow Basis"
+                    label="Statement Basis"
                     value={formatPrivateSnapshotCashFlowType(latestSnapshot.cashFlowType)}
                   />
                   <div>
@@ -301,7 +301,7 @@ export default function PrivateAssetDetailPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>As-Of</TableHead>
-                      <TableHead>Basis</TableHead>
+                      <TableHead>Statement Basis</TableHead>
                       <TableHead className="text-right">Contributed</TableHead>
                       <TableHead className="text-right">Distributed</TableHead>
                       <TableHead className="text-right">Current Value</TableHead>

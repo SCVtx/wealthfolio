@@ -23,6 +23,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -142,9 +143,10 @@ export function PrivateSnapshotEditModal({
             <DialogHeader>
               <DialogTitle>{snapshot?.id ? "Edit Statement" : "Add Statement"}</DialogTitle>
               <DialogDescription>
-                Record the latest reported statement values for this asset. Most partner
-                statements show since-inception totals, so only switch the basis if you are
-                entering MTD, QTD, or YTD activity instead.
+                Record the reported values from this statement. Most private fund statements
+                show QTD, YTD, and ITD side by side, so keep the default if you are entering
+                the ITD / inception-to-date column and only switch it when you are entering
+                period activity instead.
               </DialogDescription>
             </DialogHeader>
 
@@ -158,6 +160,11 @@ export function PrivateSnapshotEditModal({
                     <FormControl>
                       <MoneyInput {...field} />
                     </FormControl>
+                    <FormDescription>
+                      {selectedCashFlowType === "PERIOD_ONLY"
+                        ? "Enter only this statement period's contribution activity."
+                        : "Enter the ITD / inception-to-date contribution amount from the statement."}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -172,6 +179,11 @@ export function PrivateSnapshotEditModal({
                     <FormControl>
                       <MoneyInput {...field} />
                     </FormControl>
+                    <FormDescription>
+                      {selectedCashFlowType === "PERIOD_ONLY"
+                        ? "Enter only this statement period's distribution activity."
+                        : "Enter the ITD / inception-to-date distribution amount from the statement."}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -186,6 +198,9 @@ export function PrivateSnapshotEditModal({
                     <FormControl>
                       <MoneyInput {...field} />
                     </FormControl>
+                    <FormDescription>
+                      Use the partner's ending capital / ending NAV from the statement, not the gross look-through investment detail.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -204,9 +219,12 @@ export function PrivateSnapshotEditModal({
                         options={privateSnapshotCashFlowTypeOptions as unknown as ResponsiveSelectOption[]}
                         placeholder="Choose how this statement reports cash flows"
                         sheetTitle="Contribution / Distribution Basis"
-                        sheetDescription="Choose whether the contribution and distribution amounts below come from a since-inception / ITD column or only the statement period's MTD, QTD, or YTD activity."
+                        sheetDescription="Choose whether these amounts come from the statement's ITD / inception-to-date column or only from the period activity column such as MTD, QTD, or YTD."
                       />
                     </FormControl>
+                    <FormDescription>
+                      If the statement shows QTD, YTD, and ITD together, use the ITD / inception-to-date column.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

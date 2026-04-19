@@ -46,8 +46,8 @@ export const privateSnapshotValueSourceOptions = [
 ] as const;
 
 export const privateSnapshotCashFlowTypeOptions = [
-  { label: "Since inception / ITD totals", value: "TOTAL_TO_DATE" },
-  { label: "Statement period only (MTD / QTD / YTD)", value: "PERIOD_ONLY" },
+  { label: "ITD / inception-to-date column", value: "TOTAL_TO_DATE" },
+  { label: "Period activity only (MTD / QTD / YTD column)", value: "PERIOD_ONLY" },
 ] as const;
 
 const vehicleKindLabels: Record<PrivateAssetVehicleKind, string> = {
@@ -88,8 +88,8 @@ const snapshotSourceLabels: Record<PrivateSnapshotValueSourceType, string> = {
 };
 
 const snapshotCashFlowTypeLabels: Record<PrivateSnapshotCashFlowType, string> = {
-  TOTAL_TO_DATE: "Since inception / ITD totals",
-  PERIOD_ONLY: "Statement period only (MTD / QTD / YTD)",
+  TOTAL_TO_DATE: "ITD / inception-to-date",
+  PERIOD_ONLY: "Period activity only",
 };
 
 export function formatPrivateAssetVehicleKind(value: PrivateAssetVehicleKind) {
