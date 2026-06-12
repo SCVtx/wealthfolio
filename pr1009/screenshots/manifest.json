@@ -1,0 +1,74 @@
+[
+  {
+    "file": "output/playwright/01-settings-general-toggle-on.png",
+    "route": "/settings/general",
+    "finalUrl": "http://localhost:1420/settings/general",
+    "description": "General settings feature toggle on"
+  },
+  {
+    "file": "output/playwright/02-private-assets-list.png",
+    "route": "/settings/private-assets",
+    "finalUrl": "http://localhost:1420/settings/private-assets",
+    "description": "Private assets list with five seeded assets"
+  },
+  {
+    "file": "output/playwright/03-private-asset-detail-fund.png",
+    "route": "/settings/private-assets/screen-pa-harborview-buyout",
+    "finalUrl": "http://localhost:1420/settings/private-assets/screen-pa-harborview-buyout",
+    "description": "Private equity fund detail with manager, commitment, latest mark, and look-through"
+  },
+  {
+    "file": "output/playwright/04-private-asset-detail-direct.png",
+    "route": "/settings/private-assets/screen-pa-beacon-ai",
+    "finalUrl": "http://localhost:1420/settings/private-assets/screen-pa-beacon-ai",
+    "description": "Direct co-investment detail without a fund manager"
+  },
+  {
+    "file": "output/playwright/05-dashboard-investments.png",
+    "route": "/dashboard?tab=investments",
+    "finalUrl": "http://localhost:1420/dashboard?tab=investments",
+    "description": "Dashboard investments tab with public and private exposure"
+  },
+  {
+    "file": "output/playwright/06-dashboard-net-worth.png",
+    "route": "/dashboard?tab=net-worth",
+    "finalUrl": "http://localhost:1420/dashboard?tab=net-worth",
+    "description": "Dashboard net-worth tab including private asset contribution"
+  },
+  {
+    "file": "output/playwright/07-holdings-investments.png",
+    "route": "/holdings?tab=investments",
+    "finalUrl": "http://localhost:1420/holdings?tab=investments",
+    "description": "Holdings investment tab with public holdings"
+  },
+  {
+    "file": "output/playwright/08-holdings-assets-existing-alt.png",
+    "route": "/holdings?tab=assets",
+    "finalUrl": "http://localhost:1420/holdings?tab=assets",
+    "description": "Holdings assets tab with existing alternative/personal assets"
+  },
+  {
+    "file": "output/playwright/09-holdings-private-assets.png",
+    "route": "/holdings?tab=private-assets",
+    "finalUrl": "http://localhost:1420/holdings?tab=private-assets",
+    "description": "Holdings private-assets tab linking to dedicated ledger"
+  },
+  {
+    "file": "output/playwright/10-holdings-insights.png",
+    "route": "/holdings-insights",
+    "finalUrl": "http://localhost:1420/holdings-insights",
+    "description": "Holdings insights with private-assets allocation context"
+  },
+  {
+    "file": "output/playwright/11-app-launcher-private-assets.png",
+    "route": "/dashboard",
+    "finalUrl": "http://localhost:1420/dashboard",
+    "description": "App launcher search includes private assets when enabled"
+  },
+  {
+    "file": "output/playwright/12-private-assets-disabled-redirect.png",
+    "route": "/settings/private-assets",
+    "finalUrl": "http://localhost:1420/settings/general",
+    "description": "Disabled feature redirects private-assets route back to general settings"
+  }
+]
